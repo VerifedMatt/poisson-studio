@@ -1,0 +1,34 @@
+# Generated dependencies, builds and packages
+/build/
+/tools/
+/downloads/
+/vendor/
+/.bootstrap/
+/dist/
+/test-output/
+*.exe
+*.dll
+*.o
+*.pdb
+__pycache__/
+*.pyc
+
+# Private local state
+/data/
+/exports/
+/config.json
+/secrets.bin
+*.pem
+*.key
+*.sql
+*.sql.gz
+.env
+.env.*
+!.env.example
+imgui.ini
+/tests/*.txt
+/tests/*.json
+/tests/*.png
+/.vs/
+/.vscode/
+/VALIDATION.md
