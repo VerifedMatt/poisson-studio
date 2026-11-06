@@ -28,6 +28,7 @@ ESPN public scoreboard/summary feeds supply rosters, starter flags, available pl
 
 Backfills work backwards from recent matches with a request budget and delay between requests. Completed summaries are checkpointed. **Refresh imported public lineups** explicitly revisits previously imported summaries. Player minutes can be reconstructed from completed match events; local ratings are stored separately from any provider rating.
 
+This process takes a very long time, once populated entirely you have freedom to do anything very accurately! Anyways, if you only want to use poisson model without player lineups affecting the weights you still can.
 ## API-Football
 
 Documentation: https://www.api-football.com/documentation-v3
