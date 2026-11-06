@@ -19,14 +19,28 @@ static fs::path unusedExportPath(fs::path path){auto base=path;for(int n=2;fs::e
 App::App(const Settings& s):settings(s){connect();}
 App::~App(){job.cancel=true;if(worker.joinable())worker.join();}
 void App::connect(){try{db=std::make_unique<Database>(settings);connected=true;reload();}catch(const std::exception&e){connected=false;job.fail(e.what());}}
-void App::reload(){if(!db)return;int lid=leagues.empty()?0:leagues[leagueIndex].id,hid=teams.empty()?0:teams[homeIndex].id,aid=teams.empty()?0:teams[awayIndex].id,nid=teams.empty()?0:teams[newsTeam].id;leagues=db->leagues();if(leagues.empty()){teams.clear();matches.clear();fixtures.clear();return;}leagueIndex=0;for(int i=0;i<int(leagues.size());++i)if(leagues[i].id==lid||(!lid&&leagues[i].provider==0&&leagues[i].key=="SP1"))leagueIndex=i;chooseLeague(leagueIndex);for(int i=0;i<int(teams.size());++i){if(teams[i].id==hid)homeIndex=i;if(teams[i].id==aid)awayIndex=i;if(teams[i].id==nid)newsTeam=i;}news=db->news();}
-void App::chooseLeague(int i){leagueIndex=i;teams=db->teams(leagues[i].id);matches=db->matches(leagues[i].id);fixtures=db->matches(leagues[i].id,true);homeIndex=0;awayIndex=teams.size()>1?1:0;newsTeam=0;fixtureIndex=0;for(int j=int(matches.size())-1;j>=0;--j)if(matches[j].h[0]>=0){fixtureIndex=j;break;}auto has=db->query("SELECT a.fixture_id FROM appearance a JOIN fixture f ON a.fixture_id=f.id WHERE f.league_id="+std::to_string(leagues[i].id)+" ORDER BY f.date DESC LIMIT 1");if(!has.empty())for(int j=0;j<int(matches.size());++j)if(matches[j].id==std::stoll(*has[0][0]))fixtureIndex=j;playerRows.clear();extraRows.clear();}
-void App::start(std::function<void()> fn){if(job.busy)return;if(worker.joinable())worker.join();job.busy=true;job.cancel=false;job.progress=0;{std::lock_guard<std::mutex> l(job.mutex);job.error.clear();}worker=std::thread([this,fn=std::move(fn)]{try{fn();}catch(const std::exception&e){job.fail(e.what());}job.busy=false;});}
+void App::reload(){
+    if(!db)return;coverageDirty=true;
+    int lid=leagues.empty()?0:leagues[leagueIndex].id,hid=teams.empty()?0:teams[homeIndex].id,aid=teams.empty()?0:teams[awayIndex].id,nid=teams.empty()?0:teams[newsTeam].id;
+    long long selected=fixtureIndex>=0&&fixtureIndex<int(playerFixtures.size())?playerFixtures[fixtureIndex].id:0;
+    leagues=db->leagues();
+    if(leagues.empty()){teams.clear();matches.clear();fixtures.clear();playerFixtures.clear();playerRows.clear();extraRows.clear();playerStatus.clear();news.clear();fixtureIndex=-1;return;}
+    if(!lid){auto populated=db->query("SELECT f.league_id FROM appearance a JOIN fixture f ON f.id=a.fixture_id GROUP BY f.league_id ORDER BY COUNT(*) DESC,f.league_id LIMIT 1");if(!populated.empty())lid=std::stoi(*populated[0][0]);}
+    leagueIndex=0;for(int i=0;i<int(leagues.size());++i)if(leagues[i].id==lid||(!lid&&leagues[i].provider==0&&leagues[i].key=="SP1"))leagueIndex=i;
+    chooseLeague(leagueIndex);if(selected)refreshPlayers(selected);
+    for(int i=0;i<int(teams.size());++i){if(teams[i].id==hid)homeIndex=i;if(teams[i].id==aid)awayIndex=i;if(teams[i].id==nid)newsTeam=i;}news=db->news();
+}
+void App::chooseLeague(int i){
+    if(!db||i<0||i>=int(leagues.size()))return;
+    leagueIndex=i;teams=db->teams(leagues[i].id);matches=db->matches(leagues[i].id);fixtures=db->matches(leagues[i].id,true);
+    homeIndex=0;awayIndex=teams.size()>1?1:0;newsTeam=0;playerFixtureFilter[0]=0;refreshPlayers();
+}
+void App::start(std::function<void()> fn){if(job.busy)return;if(worker.joinable())worker.join();job.busy=true;job.cancel=false;job.progress=0;{std::lock_guard<std::mutex> l(job.mutex);job.error.clear();}worker=std::thread([this,fn=std::move(fn)]{try{fn();}catch(const std::exception&e){job.fail(e.what());refresh=true;}job.busy=false;});}
 void App::run(){if(teams.size()<2||homeIndex==awayIndex)return;Simulation c;c.requested=std::clamp(simulations,100,100000000);c.seed=uint32_t(seed);c.halfLife=halfLife;c.ridge=ridge;c.maxGoals=goalMax;c.maxCorners=cornerMax;c.maxCards=cardMax;c.maxShots=shotMax;c.useNews=useNews;c.homeId=teams[homeIndex].id;c.awayId=teams[awayIndex].id;c.homeName=teams[homeIndex].name;c.awayName=teams[awayIndex].name;c.leagueName=leagues[leagueIndex].country+" / "+leagues[leagueIndex].name;c.cutoff=today();auto rows=matches;auto items=news;start([this,c,rows=std::move(rows),items=std::move(items)]{pending=simulate(c,rows,items,job);});}
 void App::draw(){if(!job.busy){if(pending){result=std::move(pending);pending.reset();}if(refresh){refresh=false;try{reload();}catch(const std::exception&e){job.fail(e.what());}}}
     auto* vp=ImGui::GetMainViewport();exportPos=vp->WorkPos;exportSize=vp->WorkSize;ImGui::SetNextWindowPos(vp->WorkPos);ImGui::SetNextWindowSize(vp->WorkSize);ImGui::Begin("Poisson Studio",nullptr,ImGuiWindowFlags_NoDecoration|ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoSavedSettings);
     if(ImGui::GetIO().Fonts->Fonts.Size>1)ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[1]);ImGui::TextColored(ImVec4(.55f,.67f,1.f,1),"POISSON STUDIO");if(ImGui::GetIO().Fonts->Fonts.Size>1)ImGui::PopFont();ImGui::SameLine();ImGui::TextDisabled("Football probability lab  |  MySQL  |  %s",today().c_str());ImGui::Separator();
-    const char* pages[]={"Model & heatmaps","Data imports","News & availability","Players & lineups","Settings"};for(int i=0;i<5;++i){if(i)ImGui::SameLine();if(ImGui::Selectable(pages[i],page==i,0,ImVec2(i==0?170:155,26)))page=i;}
+    const char* pages[]={"Model & heatmaps","Data imports","News & availability","Players & lineups","Settings","Database coverage"};for(int i=0;i<6;++i){if(i)ImGui::SameLine();if(ImGui::Selectable(pages[i],page==i,0,ImVec2(i==0?170:155,26)))page=i;}
     ImGui::Separator();ImGui::BeginChild("Page",ImVec2(0,-62),false);
     if(page==0){ImGui::BeginChild("Controls",ImVec2(325,0),ImGuiChildFlags_Borders);ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,ImVec2(8,6));ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,ImVec2(8,5));
         ImGui::Text("MATCH");ImGui::InputTextWithHint("##leaguefilter","Filter leagues...",leagueFilter,sizeof(leagueFilter));std::string current=leagues.empty()?"Import a league first":leagues[leagueIndex].country+" / "+leagues[leagueIndex].name;
@@ -39,7 +53,7 @@ void App::draw(){if(!job.busy){if(pending){result=std::move(pending);pending.res
         ImGui::BeginDisabled(job.busy||teams.size()<2||homeIndex==awayIndex);if(ImGui::Button("Run simulations",ImVec2(-1,38)))run();ImGui::EndDisabled();
         ImGui::Spacing();int finished=0;std::array<int,5> counts{};for(auto&m:matches){if(m.date<today()&&m.h[0]>=0){++finished;for(int k=0;k<5;++k)if(m.h[k]>=0&&m.a[k]>=0)++counts[k];}}
         ImGui::Text("HISTORY COVERAGE");ImGui::Text("%d completed matches",finished);ImGui::Text("Goals: %d   Corners: %d",counts[0],counts[1]);ImGui::Text("Yellow cards: %d   Red cards: %d",counts[2],counts[3]);ImGui::Text("Shots on target: %d",counts[4]);ImGui::TextDisabled("Missing observations are excluded.");ImGui::PopStyleVar(2);ImGui::EndChild();ImGui::SameLine();ImGui::BeginChild("Visuals",ImVec2(0,0),false);plot();ImGui::EndChild();
-    }else if(page==1)dataPage();else if(page==2)newsPage();else if(page==3)playersPage();else settingsPage();ImGui::EndChild();
+    }else if(page==1)dataPage();else if(page==2)newsPage();else if(page==3)playersPage();else if(page==5)coveragePage();else settingsPage();ImGui::EndChild();
     ImGui::Separator();std::string status,error;{std::lock_guard<std::mutex> l(job.mutex);status=job.status;error=job.error;}if(job.busy){ImGui::ProgressBar(float(job.progress.load()),ImVec2(-110,18));ImGui::SameLine();if(ImGui::Button("Cancel"))job.cancel=true;}
     if(newsWarning){ImGui::OpenPopup("News may be inaccurate");newsWarning=false;}
     ImGui::SetNextWindowSize(ImVec2(610,0),ImGuiCond_Appearing);
@@ -84,9 +98,8 @@ void App::dataPage(){
     ImGui::BeginDisabled(leagues.empty()||leagues[leagueIndex].provider!=1);if(ImGui::Button("Import / resume five years from API")){auto s=settings;auto l=leagues[leagueIndex];int budget=apiBudget;bool detail=apiDetails;start([this,s,l,budget,detail]{Database db(s);importApiHistory(db,s,l,detail,budget,job);refresh=true;});}ImGui::EndDisabled();
     ImGui::SeparatorText("CUSTOM CSV — ANY LEAGUE");ImGui::InputText("CSV file path",customCsv,sizeof(customCsv));ImGui::InputText("League name",customName,sizeof(customName));ImGui::TextWrapped("Required: Date,HomeTeam,AwayTeam. Scores: FTHG,FTAG. Optional: HC,AC (corners), HY,AY (yellow), HR,AR (red), HST,AST (shots on target). ISO or day/month/year dates; blank means missing.");if(ImGui::Button("Import CSV")){auto s=settings;std::string path=customCsv,name=customName;start([this,s,path,name]{Database db(s);importCustomCsv(db,path,name,job);refresh=true;});}
     ImGui::EndDisabled();ImGui::SeparatorText("DATABASE COVERAGE");
-    static std::vector<std::vector<std::optional<std::string>>> coverage;static std::string storage;
-    if(db&&(coverage.empty()||ImGui::Button("Refresh coverage / storage"))){try{coverage=db->query("SELECT l.country,l.name,COUNT(f.id),SUM(f.gh IS NOT NULL AND f.ga IS NOT NULL),SUM(f.ch IS NOT NULL AND f.ca IS NOT NULL),SUM(f.yh IS NOT NULL AND f.ya IS NOT NULL),SUM(f.rh IS NOT NULL AND f.ra IS NOT NULL),SUM(h.shots_on IS NOT NULL AND a.shots_on IS NOT NULL AND f.status='FT') FROM league l JOIN fixture f ON l.id=f.league_id LEFT JOIN team_match_extra h ON h.fixture_id=f.id AND h.team_id=f.home_id LEFT JOIN team_match_extra a ON a.fixture_id=f.id AND a.team_id=f.away_id GROUP BY l.id ORDER BY l.country,l.name");auto size=db->query("SELECT ROUND(SUM(data_length+index_length)/1024/1024,2) FROM information_schema.tables WHERE table_schema=DATABASE()");auto rows=db->query("SELECT (SELECT COUNT(*) FROM player),(SELECT COUNT(*) FROM appearance),(SELECT COUNT(*) FROM match_event)");storage="Tables + indexes: "+(size.empty()?"?":size[0][0].value_or("0"))+" MB";if(!rows.empty())storage+=" | Players "+*rows[0][0]+" | Appearances "+*rows[0][1]+" | Events "+*rows[0][2];}catch(const std::exception&e){job.fail(e.what());}}
-    ImGui::TextUnformatted(storage.c_str());if(ImGui::BeginTable("Coverage",8,ImGuiTableFlags_Borders|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY,ImVec2(0,200))){for(auto h:{"Country","Competition","Fixtures","Goals","Corners","Yellow","Red","On target"})ImGui::TableSetupColumn(h);ImGui::TableHeadersRow();for(auto&r:coverage){ImGui::TableNextRow();for(int i=0;i<8;++i){ImGui::TableSetColumnIndex(i);ImGui::TextUnformatted(r[i].value_or("0").c_str());}}ImGui::EndTable();}
+    ImGui::TextWrapped("See completion percentages, missing match statistics, player records and season coverage in Database coverage. Counts refresh after each import, including cancelled or failed imports that saved partial progress.");
+    if(ImGui::Button("Open database coverage")){coverageDirty=true;page=5;}
 }
 void App::newsToggle(const char* label){bool enabled=useNews;if(ImGui::Checkbox(label,&enabled)){if(enabled)newsWarning=true;else useNews=false;}}
 void App::searchMatchNews(){if(teams.size()<2)return;auto h=teams[homeIndex],a=teams[awayIndex];auto s=settings;start([this,s,h,a]{Database db(s);int failures=0;for(auto& team:{h,a}){job.check();try{searchNews(db,team,"","",job);}catch(...){if(job.cancel)throw;++failures;}}refreshNewsSelection(db);refresh=true;job.message("Match news selected. Confirm/reject relevance in the News tab. Failed searches: "+std::to_string(failures));});}
@@ -119,22 +132,48 @@ void App::newsPage(){
     }
     if(!shown)ImGui::TextWrapped(reviewQueue?"No pending selected stories for this team. Search for news or disable the queue filter to inspect all items.":"No stored news for this team.");
 }
-void App::loadPlayers(){if(matches.empty())return;auto id=std::to_string(matches[fixtureIndex].id);
-    playerRows=db->query("SELECT t.name,p.name,CASE WHEN a.starter IS NULL THEN 'Unknown' WHEN a.starter=1 THEN 'Starting XI' ELSE 'Bench' END,a.position,a.minutes,a.goals,a.assists,a.shots,a.shots_on,a.yellow,a.red,COALESCE(a.rating,a.studio_rating),p.id,a.minutes_source,a.rating FROM appearance a JOIN player p ON a.player_id=p.id JOIN team t ON a.team_id=t.id WHERE fixture_id="+id+" ORDER BY t.name,a.starter DESC,a.shirt,p.name");extraRows.clear();
-    playerStatus=playerRows.empty()?"No records for this match. Import or refresh public lineups.":std::to_string(playerRows.size())+" players. * = Studio rating / event-derived minutes. Hover for source; click a player for all statistics.";
+void App::refreshPlayers(long long preferred){
+    playerRows.clear();extraRows.clear();playerStatus.clear();fixtureIndex=-1;playerFixtures.clear();
+    if(!db||leagues.empty())return;
+    try{
+        playerFixtures=db->lineupFixtures(leagues[leagueIndex].id);
+        for(int i=0;i<int(playerFixtures.size());++i){auto& f=playerFixtures[i];if(playersOnly&&!f.players)continue;if(fixtureIndex<0)fixtureIndex=i;if(f.id==preferred){fixtureIndex=i;break;}}
+        loadPlayers();
+    }catch(const std::exception& e){playerStatus=e.what();job.fail(e.what());}
+}
+void App::loadPlayers(){
+    playerRows.clear();extraRows.clear();
+    if(!db||fixtureIndex<0||fixtureIndex>=int(playerFixtures.size())){playerStatus="No stored lineups in this competition. Choose another league or backfill its player data in Data imports.";return;}
+    try{
+        playerRows=db->lineupPlayers(playerFixtures[fixtureIndex].id);
+        playerStatus=playerRows.empty()?"No player records for this fixture. Scheduled lineups may not be published yet. Enable Only fixtures with player data to browse existing records.":std::to_string(playerRows.size())+" players. * = Studio rating / event-derived minutes. Hover for source; click a player for all statistics.";
+    }catch(const std::exception& e){playerStatus=e.what();job.fail(e.what());}
 }
 void App::playersPage(){
     ImGui::Text("Player lineups and performance");ImGui::TextWrapped("Minutes are supplied by the provider or reconstructed from substitutions and dismissals, excluding added time. Rating* is a transparent Studio score when the source supplies no rating; it is not a provider rating.");
-    if(matches.empty()){ImGui::Text("Import a competition first.");return;}fixtureIndex=std::clamp(fixtureIndex,0,int(matches.size())-1);ImGui::SetNextItemWidth(600);
-    if(ImGui::BeginCombo("Fixture",(matches[fixtureIndex].date+" "+matches[fixtureIndex].homeName+" - "+matches[fixtureIndex].awayName).c_str())){for(int i=int(matches.size())-1;i>=0;--i){auto&m=matches[i];if(ImGui::Selectable((m.date+" "+m.homeName+" - "+m.awayName+"##"+std::to_string(m.id)).c_str(),i==fixtureIndex)){fixtureIndex=i;loadPlayers();}}ImGui::EndCombo();}
-    if(ImGui::Button("Load players / lineup"))loadPlayers();ImGui::SameLine();ImGui::BeginDisabled(job.busy||leagues[leagueIndex].provider!=0);
+    if(!connected||leagues.empty()){ImGui::Text("Connect to the database and import a competition first.");return;}
+    ImGui::SetNextItemWidth(500);if(ImGui::BeginCombo("Competition",(leagues[leagueIndex].country+" / "+leagues[leagueIndex].name).c_str())){for(int i=0;i<int(leagues.size());++i){auto& l=leagues[i];auto label=l.country+" / "+l.name+(l.provider==1?" [API]":"")+"##"+std::to_string(l.id);if(ImGui::Selectable(label.c_str(),i==leagueIndex))chooseLeague(i);}ImGui::EndCombo();}
+    ImGui::Checkbox("Only fixtures with player data",&playersOnly);ImGui::SameLine();ImGui::SetNextItemWidth(330);ImGui::InputTextWithHint("##playersearch","Search team or date...",playerFixtureFilter,sizeof(playerFixtureFilter));
+    int populated=0;std::vector<int> visible;
+    for(int i=0;i<int(playerFixtures.size());++i){auto& f=playerFixtures[i];populated+=f.players>0;if((!playersOnly||f.players)&&lower(f.date+" "+f.home+" "+f.away).contains(lower(playerFixtureFilter)))visible.push_back(i);}
+    if(std::find(visible.begin(),visible.end(),fixtureIndex)==visible.end()){fixtureIndex=visible.empty()?-1:visible[0];loadPlayers();}
+    ImGui::Text("%d fixtures with player records | %d stored fixtures | %d match your filters",populated,int(playerFixtures.size()),int(visible.size()));
+    auto label=[&](int index){auto& f=playerFixtures[index];return f.date+"  "+f.home+" - "+f.away+"  ("+std::to_string(f.players)+" players)";};
+    ImGui::SetNextItemWidth(760);if(ImGui::BeginCombo("Fixture",fixtureIndex<0?"No matching fixtures":label(fixtureIndex).c_str(),ImGuiComboFlags_HeightLarge)){
+        for(int i:visible)if(ImGui::Selectable((label(i)+"##"+std::to_string(playerFixtures[i].id)).c_str(),i==fixtureIndex)){fixtureIndex=i;loadPlayers();}ImGui::EndCombo();
+    }
+    auto pos=std::find(visible.begin(),visible.end(),fixtureIndex);int selected=int(pos-visible.begin());
+    ImGui::BeginDisabled(selected<=0||visible.empty());if(ImGui::Button("Newer fixture")){fixtureIndex=visible[selected-1];loadPlayers();}ImGui::EndDisabled();ImGui::SameLine();
+    ImGui::BeginDisabled(selected+1>=int(visible.size()));if(ImGui::Button("Older fixture")){fixtureIndex=visible[selected+1];loadPlayers();}ImGui::EndDisabled();ImGui::SameLine();
+    if(ImGui::Button("Reload stored players"))refreshPlayers(fixtureIndex<0?0:playerFixtures[fixtureIndex].id);ImGui::SameLine();ImGui::BeginDisabled(job.busy||leagues[leagueIndex].provider!=0);
     if(ImGui::Button("Refresh imported public lineups")){auto s=settings;auto code=leagues[leagueIndex].key;start([this,s,code]{Database db(s);enrichPublicPlayers(db,code,200,job,true);refresh=true;});}ImGui::EndDisabled();
     ImGui::TextWrapped("%s",playerStatus.c_str());
+    if(visible.empty()&&populated)ImGui::TextWrapped("No fixtures match the search. Clear the team/date filter to see stored lineups.");
     if(ImGui::BeginTable("Players",12,ImGuiTableFlags_BordersInnerV|ImGuiTableFlags_RowBg|ImGuiTableFlags_ScrollY|ImGuiTableFlags_Resizable,ImVec2(0,460))){
         const char* names[]={"Team","Player","Lineup","Pos","Min","Goals","Assists","Shots","On target","YC","RC","Rating"};
         for(int i=0;i<12;++i)ImGui::TableSetupColumn(names[i],i<3?ImGuiTableColumnFlags_WidthStretch:ImGuiTableColumnFlags_WidthFixed,i==0?1.0f:i==1?1.35f:i==2?.8f:i==8?82.f:62.f);ImGui::TableSetupScrollFreeze(0,1);ImGui::TableHeadersRow();
         for(auto&r:playerRows){ImGui::TableNextRow();for(int i=0;i<12;++i){ImGui::TableSetColumnIndex(i);
-            if(i==1){if(ImGui::Selectable((*r[i]+"##"+*r[12]).c_str()))extraRows=db->query("SELECT t.name,s.value FROM appearance_stat s JOIN statistic_type t ON t.id=s.statistic_id WHERE s.fixture_id="+std::to_string(matches[fixtureIndex].id)+" AND s.player_id="+*r[12]+" ORDER BY t.name");}
+            if(i==1){if(ImGui::Selectable((*r[i]+"##"+*r[12]).c_str()))try{extraRows=db->query("SELECT t.name,s.value FROM appearance_stat s JOIN statistic_type t ON t.id=s.statistic_id WHERE s.fixture_id="+std::to_string(playerFixtures[fixtureIndex].id)+" AND s.player_id="+*r[12]+" ORDER BY t.name");}catch(const std::exception& e){job.fail(e.what());}}
             else {std::string value=r[i].value_or("--");if(i==4&&r[i]&&r[13].value_or("0")=="2")value+="*";if(i==11&&r[i]&&!r[14])value+="*";ImGui::TextUnformatted(value.c_str());
                 if(i==4)tip(!r[i]?"Source omitted minutes and event timeline is incomplete.":r[13].value_or("0")=="2"?"Reconstructed from match events; nominal minutes exclude added time.":"Minutes supplied by provider.");
                 if(i==11)tip(!r[i]?"No provider rating or sufficient played statistics (unused substitutes are unrated).":r[14]?"Rating supplied by provider.":"Studio score: 6 + 0.85 goals + 0.55 assists + 0.12 shots on target - 0.30 yellow - 1.20 red - 0.70 own goals; keeper +0.08 saves -0.25 conceded. Bounded 1-10. Not a calibrated provider rating.");

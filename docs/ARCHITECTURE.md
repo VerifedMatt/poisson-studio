@@ -22,6 +22,7 @@ flowchart LR
 | `src/core.cpp` / `core.hpp` | Date/CSV helpers, fitting, simulation and model tests |
 | `src/features.cpp` | Player-minute reconstruction, local ratings, headline selection, market probabilities |
 | `src/database.cpp` / `database.hpp` | MySQL access, schema/migrations, queries and upserts |
+| `src/coverage.cpp` / `ui_coverage.cpp` | Shared lineup queries, league/season coverage aggregation and coverage page |
 | `src/platform.cpp` | HTTPS, DPAPI, private MySQL initialization/start/stop |
 | `src/providers.cpp` | Public CSV, custom CSV, API-Football and RSS adapters |
 | `src/espn.cpp` | Public roster/statistics backfill and fixture matching |

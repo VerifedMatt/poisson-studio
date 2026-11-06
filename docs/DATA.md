@@ -64,3 +64,5 @@ News search uses Google News RSS or a supplied HTTPS RSS feed. Titles, dates and
 ## Storage and coverage
 
 Shared integer IDs, nullable count fields, composite keys and dictionary-based player statistics avoid repeated raw JSON. Reimports update existing observations instead of creating duplicate fixtures. Coverage counts in the app describe what has actually been recorded. They do not imply every fixture, player, league or historical season exists in a source.
+
+The **Database coverage** page groups stored finished fixtures by competition and provider season within the rolling five-year window. FT/AET/PEN statuses count as finished; shots-on-target coverage requires FT to match the model's regulation-time filtering. Each metric requires observations for both teams. Player counts are aggregated before joining fixture counts so a roster cannot inflate the match denominator. A successful detail request with no roster remains incomplete. No expected league/season fixture total is invented for the completion percentages.

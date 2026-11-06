@@ -13,7 +13,7 @@ foreach ($needed in @($compiler,"$mysqlDir\lib\libmysql.lib","$imguiDir\imgui.cp
     if (-not (Test-Path -LiteralPath $needed)) { throw "Missing dependency: $needed. Run Setup.cmd or bootstrap.py first." }
 }
 New-Item -ItemType Directory -Force -Path 'build' | Out-Null
-$sources = @('src/core.cpp','src/features.cpp','src/database.cpp','src/demo.cpp','src/platform.cpp','src/providers.cpp','src/espn.cpp','src/ui.cpp','src/main.cpp','vendor/pugixml.cpp',
+$sources = @('src/core.cpp','src/features.cpp','src/database.cpp','src/coverage.cpp','src/demo.cpp','src/platform.cpp','src/providers.cpp','src/espn.cpp','src/ui.cpp','src/ui_coverage.cpp','src/main.cpp','vendor/pugixml.cpp',
  "vendor/imgui-$imguiVersion/imgui.cpp","vendor/imgui-$imguiVersion/imgui_draw.cpp","vendor/imgui-$imguiVersion/imgui_tables.cpp","vendor/imgui-$imguiVersion/imgui_widgets.cpp",
  "vendor/imgui-$imguiVersion/backends/imgui_impl_win32.cpp","vendor/imgui-$imguiVersion/backends/imgui_impl_dx11.cpp")
 $flags = @('-std=c++23','-DUNICODE','-D_UNICODE','-DNOMINMAX','-DWIN32_LEAN_AND_MEAN','-Isrc','-Ivendor',"-I$imguiDir","-I$mysqlDir\include")

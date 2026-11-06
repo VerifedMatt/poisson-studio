@@ -4,6 +4,8 @@ A Windows desktop football probability app built with C++23, Dear ImGui, DirectX
 
 Run 100 to 100 million simulations and explore percentage heatmaps for exact scores, total goals, corners, cards and shots on target. Inspect player lineups, review automatically selected availability news, compare betting markets against entered odds, and export PNG/CSV results.
 
+**Database coverage** shows counts, percentages and missing records for each competition and season. **Players & lineups** automatically opens stored player data and lets you search fixtures by team/date without leaving the tab.
+
 ![Synthetic demo heatmap](docs/heatmap.png)
 
 *Example from the synthetic demo league.*

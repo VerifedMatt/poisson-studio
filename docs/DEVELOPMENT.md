@@ -24,7 +24,9 @@ The app is a Windows GUI-subsystem executable: direct execution from PowerShell 
 | `--self-test` | Core/model/feature tests without MySQL or network |
 | `--integration-check` | Checks private database identity, synthetic observations, fits and exports |
 | `--db-check`, `--coverage-v2` | Database and metric coverage |
-| `--smoke` | Renders nine demo screens and exits; run `--seed-demo` first |
+| `--coverage` | Connected database identity and five-year lineup coverage by competition |
+| `--lineups-check` | Reads stored leagues and checks player auto-loading, league switching and selection preservation on refresh; no imports |
+| `--smoke` | Renders ten demo screens, including database coverage, and exits; run `--seed-demo` first |
 | `--import-league CODE` | Updates one public competition |
 | `--import-all`, `--import-cache` | All public imports, or reimport locally cached CSVs |
 | `--import-csv PATH LEAGUE_NAME` | Custom CSV import |
@@ -47,7 +49,7 @@ CLI provider codes refer to the public competitions listed in [DATA.md](DATA.md)
 
 Default checks cover setup/archive boundaries, checksum failures, package exclusions, CSV/date handling, known Poisson rates, missing observations, probability conservation, shots-on-target fitting, news effects/exclusions, minutes/ratings and fair-odds calculations.
 
-Integration checks add the synthetic demo, verify idempotent seeding, verify that MySQL is actually using this installation's data directory/port, fit all six distributions and check CSV draw totals. Graphics checks force the Windows WARP software renderer and export exact score, total goals, corners, cards, shots on target, suggestions, players, news and the warning modal. These checks do not call live football or news endpoints. They are intended for a disposable fresh installation; `-Integration` explicitly adds a demo league to the configured private database.
+Integration checks add the synthetic demo, verify idempotent seeding, verify that MySQL is actually using this installation's data directory/port, fit all six distributions and check CSV draw totals. Temporary coverage fixtures test missing versus zero counts, empty leagues, partial rosters, both starting XIs, season grouping and exclusion of old/future fixtures; their transaction is rolled back. The player browser check verifies automatic loading and preservation on refresh. Graphics checks force the Windows WARP software renderer and export exact score, total goals, corners, cards, shots on target, suggestions, players, news, coverage and the warning modal. The player screenshot must load automatically without a test-only manual load. These checks do not call live football or news endpoints. They are intended for a disposable fresh installation; `-Integration` explicitly adds a demo league to the configured private database.
 
 Logs are under `test-output/`; demo distributions/screenshots are under `exports/`. No secrets are expected in ordinary test logs, but neither entire `data` nor entire project directories should be attached as CI artifacts.
 

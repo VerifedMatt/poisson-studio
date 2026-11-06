@@ -17,6 +17,14 @@ Score matrices use home counts as rows and away counts as columns. The final bin
 
 Use **Data imports** for public competitions, custom CSVs or an optional API-Football account. Import match history first, then use a request budget for player/lineup backfill. Coverage counts show recorded observations for each metric. See [Data providers](DATA.md) for league codes, fields and limitations.
 
+## Check database coverage
+
+Open **Database coverage** to see completion bars and missing counts for goals, corners, yellow/red cards, shots on target, player records and both starting XIs. Select a competition to inspect its seasons, recorded date range and player-field coverage. Counts refresh after an import ends, including partial progress saved before cancellation or an error; **Refresh coverage** also picks up changes from another process.
+
+Match percentages use stored finished fixtures in the rolling five-year window (through today). A metric requires both teams' values. Scheduled fixtures and older records are excluded. **Any player records** can mean a partial roster; **Both starting XIs** requires 11 identified starters for each team. Minutes, ratings and player shots-on-target percentages use stored appearances in that window. Ratings include provider/Studio ratings, and unused substitutes can legitimately have no rating. An attempted detail import with an empty response is not a completed lineup.
+
+These percentages measure completeness of imported records. The total number of historical fixtures available from a source is unknown, so 100% does not certify that every real match or all five years were imported. The page also identifies the connected database folder/port and shows all-time database totals; those totals can exceed the five-year counters.
+
 ## News and lineups
 
 **News & availability** searches public Google News RSS or parses a user-specified club RSS feed. Injury and suspension keywords help categorize results, but are not evidence that a player is definitely unavailable. Each item retains its title, publication information and source URL. You can add a manually verified note.
@@ -26,6 +34,10 @@ Enabling the news toggle opens an accuracy warning and offers to find news for b
 Automatic selections start with editable scenario effects: -3% team goals, -3% team shots on target and +2% opponent goals per story. These small defaults are assumptions, not measured player effects. You can also set corner and card changes. Save effects and rerun the simulation. News expires seven days after its publication date; unknown dates require manual review. Identical headlines for the same team are counted once in the model, and aggregate rate multipliers are bounded to 0.25–2.0. Keyword relevance can be wrong, and competition-specific suspensions still need review.
 
 **Players & lineups** displays minutes, goals, assists, shots, shots on target, cards and ratings. Minutes are taken from the source when available; otherwise completed matches use substitution/dismissal events and the nominal 90/120-minute duration, excluding added time. Derived minutes carry an asterisk. Incomplete event timelines remain unavailable. Unused substitutes have zero minutes and no local rating.
+
+Choose **Competition** directly in this tab. On startup, the app selects the competition with the most stored player appearances. The newest fixture with stored player records loads automatically; **Only fixtures with player data** is enabled by default. Search by a team name or date, choose a fixture, or use **Newer fixture / Older fixture**. Turn off the filter to inspect a scheduled or unpopulated fixture. Player browsing includes older stored records even when they fall outside the model's five-year window. **Reload stored players** reads the local database; it does not fetch new data. Imports and database refreshes preserve the selected fixture where possible and reload its rows automatically.
+
+If the table is empty, check the competition and team/date filter. Match CSV imports do not contain player appearances: use **Backfill / resume public player data** in Data imports for the same competition, or the optional API provider. Separate extracted installations normally have separate databases; the Database coverage page shows which one is connected.
 
 Published ratings support numeric and string formats and take precedence. When the public feed supplies no rating, **Rating*** shows a separately stored **Studio score**: `6 + 0.85*goals + 0.55*assists + 0.12*shots_on_target - 0.30*yellow - 1.20*red - 0.70*own_goals`, with goalkeepers additionally receiving `+0.08*saves - 0.25*goals_conceded`. Scores are bounded to 1–10. This is an explicit local performance heuristic, not a provider rating or calibrated measure of player quality. Hover a rating or minute value to inspect its source. **Refresh imported public lineups** updates existing records instead of skipping their import checkpoints.
 

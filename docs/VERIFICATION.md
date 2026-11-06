@@ -5,7 +5,13 @@ The source includes reproducible checks for:
 - Dependency checksums, archive path boundaries and source-package exclusions.
 - Model rates, missing observations, simulation conservation, news decisions, player-minute reconstruction, rating provenance and market calculations.
 - Fresh private MySQL identity, idempotent synthetic imports and complete CSV distributions.
-- Nine rendered screens using DirectX WARP without a football API subscription.
+- Ten rendered screens using DirectX WARP without a football API subscription.
+
+## Version 0.2.1 checks
+
+The Windows build, six setup/package tests, core model tests and six simulation-export checks pass. Transactional database tests cover empty leagues, season grouping, zero versus missing counts, partial lineups, 11 starters per team, player-field denominators and exclusion of future/out-of-window matches. Test records are rolled back.
+
+Player-browser checks use the same application methods as the GUI to verify automatic loading, league switching and preservation of the selected fixture across a database reload. The graphics suite now includes database coverage and requires the player page to load without a manual test-only reload. All ten WARP screenshots passed locally.
 
 ## Verified locally on 6 November 2026
 
